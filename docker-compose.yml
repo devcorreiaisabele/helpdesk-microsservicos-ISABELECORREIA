@@ -1,22 +1,109 @@
-services:
-  helpdesk:
-    build: .
-    ports:
-      - "127.0.0.1:8000:8000"   # só acessível pelo próprio computador
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      DADOS_EXEMPLO: ${DADOS_EXEMPLO:-1}
-    volumes:
-      - dados:/dados
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+# HelpDesk TI em microsserviços. Tudo sobe com:  docker compose up --build
+# Só o gateway publica porta (127.0.0.1:8000). Serviços e bancos ficam na rede interna.
+name: helpdesk-microsservicos
 
+# --- blocos reutilizados ------------------------------------------------------
+x-seguranca: &seguranca
+  user: "10001:10001"          # sem root
+  read_only: true              # sistema de arquivos somente leitura
+  tmpfs:
+    - /tmp                     # única área gravável além do volume de dados
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+  restart: unless-stopped
+
+x-ambiente: &ambiente
+  # o .env é lido automaticamente; sem ele valem os valores padrão abaixo
+  # (apenas para laboratório: gere um segredo próprio, veja o README)
+  JWT_SEGREDO: ${JWT_SEGREDO:-dev-apenas-laboratorio-troque-este-segredo-no-env-0000000000}
+  DADOS_EXEMPLO: ${DADOS_EXEMPLO:-1}
+  SENHA_EXEMPLO: ${SENHA_EXEMPLO:-Helpdesk2026}
+  PYTHONDONTWRITEBYTECODE: "1"
+
+x-saude: &saude
+  test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/saude', timeout=2).status == 200 else 1)"]
+  interval: 10s
+  timeout: 3s
+  retries: 5
+  start_period: 15s
+
+# --- serviços -------------------------------------------------------------------
+services:
+  usuarios:
+    <<: *seguranca
+    build: ./usuarios
+    environment:
+      <<: *ambiente
+      DATABASE_URL: sqlite:////dados/usuarios.db
+    volumes:
+      - usuarios_dados:/dados
+    networks: [backend]
+    expose: ["8000"]
+    healthcheck: *saude
+
+  inventario:
+    <<: *seguranca
+    build: ./inventario
+    environment:
+      <<: *ambiente
+      DATABASE_URL: sqlite:////dados/inventario.db
+    volumes:
+      - inventario_dados:/dados
+    networks: [backend]
+    expose: ["8000"]
+    healthcheck: *saude
+
+  chamados:
+    <<: *seguranca
+    build: ./chamados
+    environment:
+      <<: *ambiente
+      DATABASE_URL: sqlite:////dados/chamados.db
+      USUARIOS_URL: http://usuarios:8000
+      INVENTARIO_URL: http://inventario:8000
+      TIMEOUT_HTTP: "3"        # segundos, nas chamadas para Usuários e Inventário
+    volumes:
+      - chamados_dados:/dados
+    networks: [backend]
+    expose: ["8000"]
+    healthcheck: *saude
+    depends_on:
+      usuarios:
+        condition: service_started
+      inventario:
+        condition: service_started
+
+  gateway:
+    <<: *seguranca
+    build: ./gateway
+    environment:
+      USUARIOS_URL: http://usuarios:8000
+      INVENTARIO_URL: http://inventario:8000
+      CHAMADOS_URL: http://chamados:8000
+      GATEWAY_TIMEOUT: "5"
+      PYTHONDONTWRITEBYTECODE: "1"
+    ports:
+      - "127.0.0.1:8000:8000"  # único ponto exposto, e só para a própria máquina
+    networks: [frontend, backend]
+    healthcheck: *saude
+    depends_on:
+      usuarios:
+        condition: service_started
+      inventario:
+        condition: service_started
+      chamados:
+        condition: service_started
+
+# --- volumes: um por serviço, nenhum compartilhado ------------------------------
 volumes:
-  dados:
+  usuarios_dados:
+  inventario_dados:
+  chamados_dados:
+
+# --- redes ------------------------------------------------------------------
+networks:
+  frontend: {}                 # só o gateway, para poder publicar a porta
+  backend:
+    internal: true             # sem acesso à internet e sem portas publicadas
