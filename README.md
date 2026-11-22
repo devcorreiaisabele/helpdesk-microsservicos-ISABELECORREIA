@@ -1,6 +1,6 @@
 # HelpDesk TI em Microsserviços
 
-> 🎥 **Vídeo de demonstração:** _cole aqui o link do vídeo (YouTube não listado ou Google Drive)_
+> 🎥 **Vídeo de demonstração: https://youtu.be/Rei8gsThnws
 
 O **HelpDesk TI** era um monólito: uma aplicação, um banco e uma implantação. Esta versão separa o sistema em **três serviços independentes**, cada um com o seu banco, atrás de um **API Gateway** que é o único ponto de entrada. As funcionalidades e as regras (SLA e transições de status) são as mesmas do monólito.
 
