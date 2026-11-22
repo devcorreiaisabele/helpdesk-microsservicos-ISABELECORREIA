@@ -28,6 +28,12 @@ async def ciclo_de_vida(app: FastAPI):
 
 
 app = FastAPI(title="HelpDesk TI - Chamados", lifespan=ciclo_de_vida)
+
+# >>> eventos (gerado por criar_notificacoes.py)
+from app.eventos import instalar_publicador as _instalar_publicador
+
+_instalar_publicador(app)
+# <<< eventos
 app.add_middleware(CabecalhosDeSeguranca)
 
 

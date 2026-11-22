@@ -97,7 +97,39 @@ services:
         condition: service_started
 
 # --- volumes: um por serviço, nenhum compartilhado ------------------------------
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
+  notificacoes:
+    build: ./notificacoes
+    restart: unless-stopped
+    environment:
+      JWT_SEGREDO: ${JWT_SEGREDO:-dev-apenas-laboratorio-troque-este-segredo-no-env-0000000000}
+      DATABASE_URL: sqlite:////dados/notificacoes.db
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - notificacoes_dados:/dados
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/saude', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - frontend
+      - backend
 volumes:
+  notificacoes_dados:
   usuarios_dados:
   inventario_dados:
   chamados_dados:

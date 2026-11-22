@@ -66,6 +66,48 @@ app = FastAPI(
     lifespan=ciclo_de_vida,
 )
 
+# >>> notificacoes (gerado por criar_notificacoes.py)
+import os as _os
+
+import httpx as _httpx
+from fastapi import Request as _Request
+from fastapi import Response as _Response
+
+_NOTIFICACOES_URL = _os.getenv("NOTIFICACOES_URL", "http://notificacoes:8000")
+_CABECALHOS_SALTADOS = {
+    "host", "content-length", "connection", "keep-alive", "transfer-encoding",
+    "upgrade", "te", "trailers", "proxy-authenticate", "proxy-authorization",
+    "content-encoding",
+}
+_METODOS_NOTIF = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+
+
+@app.api_route("/notificacoes", methods=_METODOS_NOTIF, include_in_schema=False)
+@app.api_route("/notificacoes/{caminho:path}", methods=_METODOS_NOTIF, include_in_schema=False)
+async def _encaminhar_notificacoes(request: _Request, caminho: str = ""):
+    destino = f"{_NOTIFICACOES_URL}/notificacoes" + (f"/{caminho}" if caminho else "")
+    cabecalhos = {
+        k: v for k, v in request.headers.items() if k.lower() not in _CABECALHOS_SALTADOS
+    }
+    try:
+        async with _httpx.AsyncClient(timeout=10) as cliente:
+            resp = await cliente.request(
+                request.method,
+                destino,
+                params=request.query_params,
+                content=await request.body(),
+                headers=cabecalhos,
+            )
+    except _httpx.HTTPError:
+        return _Response(
+            content='{"detail":"Serviço de notificações indisponível"}',
+            status_code=503,
+            media_type="application/json",
+        )
+    saida = {k: v for k, v in resp.headers.items() if k.lower() not in _CABECALHOS_SALTADOS}
+    return _Response(content=resp.content, status_code=resp.status_code, headers=saida)
+# <<< notificacoes
+
 
 @app.middleware("http")
 async def cabecalhos_de_seguranca(request: Request, call_next):
@@ -113,10 +155,6 @@ async def saude(request: Request):
 
 
 # --- proxy reverso (sempre por último: captura todo o resto) -------------------
-
-@app.get('/notificacoes', include_in_schema=False)
-async def notificacoes_vazio():
-    return []
 
 @app.api_route(
     "/{caminho:path}",
