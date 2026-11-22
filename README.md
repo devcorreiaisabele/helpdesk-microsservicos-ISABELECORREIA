@@ -182,5 +182,5 @@ docker compose run --rm chamados python -m pytest
 Marque o que foi entregue:
 
 - [x] Rota de saúde: `GET /saude` em cada serviço e no gateway (com os três serviços na barra de status da tela)
-- [ ] Notificações por evento (`ChamadoAberto`, `ChamadoAtribuido`, `ChamadoResolvido`) com fila e serviço de Notificações
-- [ ] Testes por serviço rodando no GitHub Actions
+- [x] Notificações por evento (`ChamadoAberto`, `ChamadoAtribuido`, `ChamadoResolvido`) com fila e serviço de Notificações
+- [x] Testes por serviço rodando no GitHub Actions
